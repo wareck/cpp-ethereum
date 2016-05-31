@@ -2,6 +2,8 @@
 
 Forked Genoil's ethminer compatible with nhethpool: https://github.com/nicehash/nhethpool
 
+Download WIN builds here: https://github.com/nicehash/cpp-ethereum/releases
+
 ## ethminer-genoil
 
 What is ethminer-0.9.41-genoil-1.x.x? 
