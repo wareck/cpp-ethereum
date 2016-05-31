@@ -70,6 +70,7 @@ int main(int argc, char** argv)
 {
 	cout << "Genoil's ethminer " << ETH_PROJECT_VERSION << endl;
 	cout << "=====================================================================" << endl;
+	cout << "Modified by NiceHash with better&correct stratum" << endl;
 	cout << "Forked from github.com/ethereum/cpp-ethereum" << endl;
 	cout << "CUDA kernel ported from Tim Hughes' OpenCL kernel" << endl;
 	cout << "With contributions from nerdralph, RoBiK, tpruvot and sp_ " << endl << endl;

@@ -40,7 +40,7 @@ public:
 		unsigned _deviceId = 0
 		);
 	void finish();
-	void search(uint8_t const* header, uint64_t target, search_hook& hook);
+	void search(uint8_t const* header, uint64_t target, search_hook& hook, uint64_t startn);
 
 	/* -- default values -- */
 	/// Default value of the block size. Also known as workgroup size.
@@ -54,6 +54,7 @@ private:
 	hash32_t m_current_header;
 	uint64_t m_current_target;
 	uint64_t m_current_nonce;
+	uint64_t m_starting_nonce;
 	uint64_t m_current_index;
 
 	volatile uint32_t ** m_search_buf;

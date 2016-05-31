@@ -96,6 +96,12 @@ struct MiningChannel: public LogChannel
 };
 #define minelog clog(MiningChannel)
 
+struct ReportStruct
+{
+	double speed;
+	unsigned int DAGprogress;
+};
+
 class MinerCLI
 {
 public:
@@ -109,7 +115,12 @@ public:
 		Stratum
 	};
 
-	MinerCLI(OperationMode _mode = OperationMode::None): mode(_mode) {}
+	MinerCLI(OperationMode _mode = OperationMode::None): mode(_mode) 
+	{
+		m_speedReportSocket = new boost::asio::ip::udp::socket(m_io_service, boost::asio::ip::udp::v4());
+		boost::asio::socket_base::non_blocking_io command(true);
+		m_speedReportSocket->io_control(command);
+	}
 
 	bool interpretOption(int& i, int argc, char** argv)
 	{
@@ -222,6 +233,10 @@ public:
 		else if ((arg == "--work-timeout") && i + 1 < argc)
 		{
 			m_worktimeout = atoi(argv[++i]);
+		}
+		else if ((arg == "--report-port") && i + 1 < argc)
+		{
+			m_speedReportPort = atoi(argv[++i]);
 		}
 		
 #endif
@@ -352,8 +367,8 @@ public:
 				cerr << "Bad " << arg << " option: " << argv[i] << endl;
 				BOOST_THROW_EXCEPTION(BadArgument());
 			}
-		else if (arg == "-C" || arg == "--cpu")
-			m_minerType = MinerType::CPU;
+		//else if (arg == "-C" || arg == "--cpu")
+		//	m_minerType = MinerType::CPU;
 		else if (arg == "-G" || arg == "--opencl")
 			m_minerType = MinerType::CL;
 		else if (arg == "-U" || arg == "--cuda")
@@ -624,7 +639,7 @@ public:
 			<< "		bench - like old, but keep epoch 0 for benchmarking" << endl
 			<< "        all   - erase all DAG files. After deleting all files, setting changes to none." << endl
 			<< "Mining configuration:" << endl
-			<< "    -C,--cpu  When mining, use the CPU." << endl
+			//<< "    -C,--cpu  When mining, use the CPU." << endl
 			<< "    -G,--opencl  When mining use the GPU via OpenCL." << endl
 			<< "    -U,--cuda  When mining use the GPU via CUDA." << endl
 			<< "    --opencl-platform <n>  When mining using -G/--opencl use OpenCL platform n (default: 0)." << endl
@@ -651,6 +666,7 @@ public:
 			<< "        sync  - Instruct CUDA to block the CPU thread on a synchronization primitive when waiting for the results from the device." << endl
 			<< "    --cuda-devices <0 1 ..n> Select which CUDA GPUs to mine on. Default is to use all" << endl
 #endif
+			<< "    --report-port Speed reporting port (used by NiceHash Miner)" << endl
 			;
 	}
 
@@ -662,11 +678,22 @@ private:
 	{
 		h256 seedHash = EthashAux::seedHash(_n);
 		cout << "Initializing DAG for epoch beginning #" << (_n / 30000 * 30000) << " (seedhash " << seedHash.abridged() << "). This will take a while." << endl;
-		EthashAux::full(seedHash, true);
+		EthashAux::full(seedHash, true, [&](unsigned _pc) {
+			cout << "\rCreating DAG. " << _pc << "% done..." << flush;
+			reportDAGprogress(_pc);
+			return 0;
+		});
 		exit(0);
 	}
 
-	
+	void reportDAGprogress(unsigned _pc)
+	{
+		ReportStruct rs;
+		rs.DAGprogress = _pc;
+		rs.speed = 0;
+		boost::asio::ip::udp::endpoint endpoint(boost::asio::ip::address::from_string("127.0.0.1"), m_speedReportPort);
+		m_speedReportSocket->send_to(boost::asio::buffer((void*)&rs, (size_t)sizeof(ReportStruct)), endpoint);
+	}
 
 	void doBenchmark(MinerType _m, bool _phoneHome, unsigned _warmupDuration = 15, unsigned _trialDuration = 3, unsigned _trials = 5)
 	{
@@ -1049,22 +1076,63 @@ private:
 			client.submit(sol);
 			return false;
 		});
+
+		boost::asio::ip::udp::endpoint endpoint(boost::asio::ip::address::from_string("127.0.0.1"), m_speedReportPort);
 		 
+#define WORKINGPROGRESS_BACKLOG_SIZE 32
+#define REPORT_DELAY 4
+		WorkingProgress wplist[WORKINGPROGRESS_BACKLOG_SIZE];
+		int wplist_index = 0;
+		bool first = false;
+		//int wplist_filled = 0;
+
 		while (client.isRunning())
 		{
 			auto mp = f.miningProgress();
+			if (!first) first = true; // for some reason, first ms is huge...
+			else
+			{
+				wplist[wplist_index].hashes = mp.hashes;
+				wplist[wplist_index].ms = mp.ms;
+				wplist_index = (wplist_index + 1) % WORKINGPROGRESS_BACKLOG_SIZE;
+				//wplist_filled = (wplist_filled == WORKINGPROGRESS_BACKLOG_SIZE) ? wplist_filled : (wplist_filled + 1);
+				mp.hashes = 0;
+				mp.ms = 0;
+				for (int i = 0; i != WORKINGPROGRESS_BACKLOG_SIZE; ++i)
+				{
+					mp.hashes += wplist[i].hashes;
+					mp.ms += wplist[i].ms;
+				}
+
+				if (wplist_index % REPORT_DELAY == 0)
+				{
+					ReportStruct rs;
+					rs.speed = 0;
+					if (mp.ms > 0)
+						rs.speed = (double)mp.hashes / (mp.ms * 1000);
+					rs.DAGprogress = 100;
+					m_speedReportSocket->send_to(boost::asio::buffer((void*)&rs, sizeof(ReportStruct)), endpoint);
+				}
+			}
+
 			f.resetMiningProgress();
 			if (client.isConnected())
 			{
 				if (client.current())
-					minelog << "Mining on PoWhash" << "#"+(client.currentHeaderHash().hex().substr(0,8)) << ": " << mp << f.getSolutionStats();
+					minelog << "Mining on PoWhash" << "#" + (client.currentHeaderHash().hex().substr(0, 8)) << ": " << mp << f.getSolutionStats();
 				else if (client.waitState() == MINER_WAIT_STATE_WORK)
 					minelog << "Waiting for work package...";
 			}
 			this_thread::sleep_for(chrono::milliseconds(m_farmRecheckPeriod));
 		}
+
+		delete m_speedReportSocket;
 	}
 #endif
+
+	uint16_t m_speedReportPort = 37450;
+	boost::asio::ip::udp::socket* m_speedReportSocket;
+	boost::asio::io_service m_io_service;
 
 	/// Operating mode.
 	OperationMode mode;

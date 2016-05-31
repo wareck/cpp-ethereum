@@ -52,6 +52,8 @@ private:
 	void handleResponse(const boost::system::error_code& ec);
 	void readResponse(const boost::system::error_code& ec, std::size_t bytes_transferred);
 	void processReponse(Json::Value& responseObject);
+
+	void processExtranonce(string& enonce);
 	
 	MinerType m_minerType;
 
@@ -93,4 +95,7 @@ private:
 
 	boost::asio::deadline_timer * p_worktimer;
 
+	double m_nextWorkDifficulty = 1;
+	h64 m_extraNonce;
+	int m_extraNonceHexSize;
 };

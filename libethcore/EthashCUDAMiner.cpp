@@ -31,6 +31,7 @@ along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 #include <thread>
 #include <chrono>
 #include <libethash-cuda/ethash_cuda_miner.h>
+#include <libethash/endian.h>
 using namespace std;
 using namespace dev;
 using namespace eth;
@@ -180,7 +181,11 @@ void EthashCUDAMiner::workLoop()
 		}
 
 		uint64_t upper64OfBoundary = (uint64_t)(u64)((u256)w.boundary >> 192);
-		m_miner->search(w.headerHash.data(), upper64OfBoundary, *m_hook);
+		uint64_t startn = w.startNonce | ((uint64_t)index() << (64 - 4 - w.exSizeBits)); // this can support up to 16 devices
+		uint64_t swapped = ethash_swap_u64(startn);
+		Nonce startN((byte const*)&swapped, h64::ConstructFromPointerType::ConstructFromPointer);
+		cnote << "starting nonce is " << startN.hex();
+		m_miner->search(w.headerHash.data(), upper64OfBoundary, *m_hook, startn);
 	}
 	catch (std::runtime_error const& _e)
 	{

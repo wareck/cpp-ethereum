@@ -1,6 +1,7 @@
 
 #include "EthStratumClient.h"
 #include <libdevcore/Log.h>
+#include <libethash/endian.h>
 using boost::asio::ip::tcp;
 
 
@@ -160,7 +161,7 @@ void EthStratumClient::connect_handler(const boost::system::error_code& ec, tcp:
 				p_farm->start("cuda");
 		}
 		std::ostream os(&m_requestBuffer);
-		os << "{\"id\": 1, \"method\": \"mining.subscribe\", \"params\": []}\n";
+		os << "{\"id\": 1, \"method\": \"mining.subscribe\", \"params\": [\"ethminer/" << ETH_PROJECT_VERSION << "\",\"EthereumStratum/1.0.0\"]}\n";
 
 		
 		async_write(m_socket, m_requestBuffer,
@@ -242,6 +243,37 @@ void EthStratumClient::readResponse(const boost::system::error_code& ec, std::si
 	}
 }
 
+static void diffToTarget(uint32_t *target, double diff)
+{
+	uint32_t target2[8];
+	uint64_t m;
+	int k;
+
+	for (k = 6; k > 0 && diff > 1.0; k--)
+		diff /= 4294967296.0;
+	m = (uint64_t)(4294901760.0 / diff);
+	if (m == 0 && k == 6)
+		memset(target2, 0xff, 32);
+	else {
+		memset(target2, 0, 32);
+		target2[k] = (uint32_t)m;
+		target2[k + 1] = (uint32_t)(m >> 32);
+	}
+
+	for (int i = 0; i < 32; i++)
+		((uint8_t*)target)[31 - i] = ((uint8_t*)target2)[i];
+}
+
+void EthStratumClient::processExtranonce(string& enonce)
+{
+	m_extraNonceHexSize = enonce.length();
+
+	cnote << "Extranonce set to " << enonce;
+
+	for (int i = enonce.length(); i < 16; ++i) enonce += "0";
+	m_extraNonce = h64(enonce);
+}
+
 void EthStratumClient::processReponse(Json::Value& responseObject)
 {
 	Json::Value error = responseObject.get("error", new Json::Value);
@@ -258,13 +290,22 @@ void EthStratumClient::processReponse(Json::Value& responseObject)
 	case 1:
 		cnote << "Subscribed to stratum server";
 
-		os << "{\"id\": 2, \"method\": \"mining.authorize\", \"params\": [\"" << p_active->user << "\",\"" << p_active->pass << "\"]}\n";
+		params = responseObject.get("result", Json::Value::null);
+		if (params.isArray())
+			processExtranonce(params.get((Json::Value::ArrayIndex)1, "").asString());
+
+		os << "{\"id\": 2, \"method\": \"mining.extranonce.subscribe\", \"params\": []}\n";
+
+		os << "{\"id\": 3, \"method\": \"mining.authorize\", \"params\": [\"" << p_active->user << "\",\"" << p_active->pass << "\"]}\n";
 
 		async_write(m_socket, m_requestBuffer,
 			boost::bind(&EthStratumClient::handleResponse, this,
 			boost::asio::placeholders::error));
 		break;
 	case 2:
+		// nothing to do...
+		break;
+	case 3:
 		m_authorized = responseObject.get("result", Json::Value::null).asBool();
 		if (!m_authorized)
 		{
@@ -292,18 +333,12 @@ void EthStratumClient::processReponse(Json::Value& responseObject)
 			if (params.isArray())
 			{
 				string job = params.get((Json::Value::ArrayIndex)0, "").asString();
-				string sHeaderHash = params.get((Json::Value::ArrayIndex)1, "").asString();
-				string sSeedHash = params.get((Json::Value::ArrayIndex)2, "").asString();
-				string sShareTarget = params.get((Json::Value::ArrayIndex)3, "").asString();
+				string sSeedHash = params.get((Json::Value::ArrayIndex)1, "").asString();
+				string sHeaderHash = params.get((Json::Value::ArrayIndex)2, "").asString();
 				//bool cleanJobs = params.get((Json::Value::ArrayIndex)4, "").asBool();
-				
-				// coinmine.pl fix
-				int l = sShareTarget.length();
-				if (l < 66)
-					sShareTarget = "0x" + string(66 - l, '0') + sShareTarget.substr(2);
 								
 
-				if (sHeaderHash != "" && sSeedHash != "" && sShareTarget != "")
+				if (sHeaderHash != "" && sSeedHash != "")
 				{
 					cnote << "Received new job #" + job.substr(0,8);
 					//cnote << "Header hash: " + sHeaderHash;
@@ -327,8 +362,8 @@ void EthStratumClient::processReponse(Json::Value& responseObject)
 					{
 						EthashAux::computeFull(sha3(seedHash), true);
 					}
-					if (headerHash != m_current.headerHash)
-					{
+					//if (headerHash != m_current.headerHash)
+					//{
 						//x_current.lock();
 						if (p_worktimer)
 							p_worktimer->cancel();
@@ -336,25 +371,41 @@ void EthStratumClient::processReponse(Json::Value& responseObject)
 						m_previous.headerHash = m_current.headerHash;
 						m_previous.seedHash = m_current.seedHash;
 						m_previous.boundary = m_current.boundary;
+						m_previous.startNonce = m_current.startNonce;
+						m_previous.exSizeBits = m_previous.exSizeBits;
 						m_previousJob = m_job;
 
 						m_current.headerHash = h256(sHeaderHash);
 						m_current.seedHash = seedHash;
-						m_current.boundary = h256(sShareTarget);// , h256::AlignRight);
+						m_current.boundary = h256();
+						diffToTarget((uint32_t*)m_current.boundary.data(), m_nextWorkDifficulty);
+						m_current.startNonce = ethash_swap_u64(*((uint64_t*)m_extraNonce.data()));
+						m_current.exSizeBits = m_extraNonceHexSize * 4;
 						m_job = job;
 
 						p_farm->setWork(m_current);
 						//x_current.unlock();
-						p_worktimer = new boost::asio::deadline_timer(m_io_service, boost::posix_time::seconds(m_worktimeout));
-						p_worktimer->async_wait(boost::bind(&EthStratumClient::work_timeout_handler, this, boost::asio::placeholders::error));
+						//p_worktimer = new boost::asio::deadline_timer(m_io_service, boost::posix_time::seconds(m_worktimeout));
+						//p_worktimer->async_wait(boost::bind(&EthStratumClient::work_timeout_handler, this, boost::asio::placeholders::error));
 
-					}
+					//}
 				}
 			}
 		}
 		else if (method == "mining.set_difficulty")
 		{
-
+			params = responseObject.get("params", Json::Value::null);
+			if (params.isArray())
+			{
+				m_nextWorkDifficulty = params.get((Json::Value::ArrayIndex)0, 1).asDouble();
+				cnote << "Difficulty set to " << m_nextWorkDifficulty;
+			}
+		}
+		else if (method == "mining.set_extranonce")
+		{
+			params = responseObject.get("params", Json::Value::null);
+			if (params.isArray())
+				processExtranonce(params.get((Json::Value::ArrayIndex)0, "").asString());
 		}
 		else if (method == "client.get_version")
 		{
@@ -384,11 +435,12 @@ bool EthStratumClient::submit(EthashProofOfWork::Solution solution) {
 	x_current.unlock();
 
 	cnote << "Solution found; Submitting to" << p_active->host << "...";
-	cnote << "  Nonce:" << "0x" + solution.nonce.hex();
+	string minernonce = solution.nonce.hex().substr(m_extraNonceHexSize, 16 - m_extraNonceHexSize);
+	cnote << "  Miner nonce:" << minernonce;
 
 	if (EthashAux::eval(tempWork.seedHash, tempWork.headerHash, solution.nonce).value < tempWork.boundary)
 	{
-		string json = "{\"id\": 4, \"method\": \"mining.submit\", \"params\": [\"" + p_active->user + "\",\"" + temp_job + "\",\"0x" + solution.nonce.hex() + "\",\"0x" + tempWork.headerHash.hex() + "\",\"0x" + solution.mixHash.hex() + "\"]}\n";
+		string json = "{\"id\": 4, \"method\": \"mining.submit\", \"params\": [\"" + p_active->user + "\",\"" + temp_job + "\",\"" + minernonce + "\"]}\n";
 		std::ostream os(&m_requestBuffer);
 		os << json;
 		m_stale = false;
@@ -399,7 +451,7 @@ bool EthStratumClient::submit(EthashProofOfWork::Solution solution) {
 	}
 	else if (EthashAux::eval(tempPreviousWork.seedHash, tempPreviousWork.headerHash, solution.nonce).value < tempPreviousWork.boundary)
 	{
-		string json = "{\"id\": 4, \"method\": \"mining.submit\", \"params\": [\"" + p_active->user + "\",\"" + temp_previous_job + "\",\"0x" + solution.nonce.hex() + "\",\"0x" + tempPreviousWork.headerHash.hex() + "\",\"0x" + solution.mixHash.hex() + "\"]}\n";
+		string json = "{\"id\": 4, \"method\": \"mining.submit\", \"params\": [\"" + p_active->user + "\",\"" + temp_previous_job + "\",\"" + minernonce + "\"]}\n";
 		std::ostream os(&m_requestBuffer);
 		os << json;
 		m_stale = true;

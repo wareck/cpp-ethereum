@@ -251,7 +251,7 @@ bool ethash_cuda_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned _d
 	}
 }
 
-void ethash_cuda_miner::search(uint8_t const* header, uint64_t target, search_hook& hook)
+void ethash_cuda_miner::search(uint8_t const* header, uint64_t target, search_hook& hook, uint64_t startn)
 {
 	bool initialize = false;
 	bool exit = false;
@@ -269,12 +269,19 @@ void ethash_cuda_miner::search(uint8_t const* header, uint64_t target, search_ho
 	}
 	if (initialize)
 	{
-		random_device engine;
-		m_current_nonce = uniform_int_distribution<uint64_t>()(engine);
+		//random_device engine;
+		//m_current_nonce = uniform_int_distribution<uint64_t>()(engine);
+		m_starting_nonce = 0;
 		m_current_index = 0;
 		CUDA_SAFE_CALL(cudaDeviceSynchronize());
 		for (unsigned int i = 0; i < s_numStreams; i++)
 			m_search_buf[i][0] = 0;
+	}
+	if (m_starting_nonce != startn)
+	{
+		// reset nonce counter
+		m_starting_nonce = startn;
+		m_current_nonce = m_starting_nonce;
 	}
 	uint64_t batch_size = s_gridSize * s_blockSize;
 	for (; !exit; m_current_index++, m_current_nonce += batch_size)
