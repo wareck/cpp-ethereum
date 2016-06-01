@@ -340,7 +340,7 @@ void EthStratumClient::processReponse(Json::Value& responseObject)
 
 				if (sHeaderHash != "" && sSeedHash != "")
 				{
-					cnote << "Received new job #" + job.substr(0,8);
+					cnote << "Received new job #" + job;
 					//cnote << "Header hash: " + sHeaderHash;
 					//cnote << "Seed hash: " + sSeedHash;
 					//cnote << "Share target: " + sShareTarget;
