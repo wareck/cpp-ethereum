@@ -24,10 +24,17 @@ typedef struct {
 	string pass;
 } cred_t;
 
+struct ReportStruct
+{
+	double speed;
+	unsigned int DAGprogress;
+};
+
 class EthStratumClient
 {
 public:
-	EthStratumClient(GenericFarm<EthashProofOfWork> * f, MinerType m, string const & host, string const & port, string const & user, string const & pass, int const & retries, int const & worktimeout, bool const & precompute);
+	EthStratumClient(GenericFarm<EthashProofOfWork> * f, MinerType m, string const & host, string const & port, string const & user, string const & pass, int const & retries, int const & worktimeout, bool const & precompute,
+		boost::asio::ip::udp::socket* speedReportSocket, uint16_t speedReportPort);
 	~EthStratumClient();
 
 	void setFailover(string const & host, string const & port);
@@ -98,4 +105,6 @@ private:
 	double m_nextWorkDifficulty = 1;
 	h64 m_extraNonce;
 	int m_extraNonceHexSize;
+	boost::asio::ip::udp::socket* m_speedReportSocket;
+	uint16_t m_speedReportPort;
 };

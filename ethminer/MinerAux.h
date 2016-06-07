@@ -96,12 +96,6 @@ struct MiningChannel: public LogChannel
 };
 #define minelog clog(MiningChannel)
 
-struct ReportStruct
-{
-	double speed;
-	unsigned int DAGprogress;
-};
-
 class MinerCLI
 {
 public:
@@ -1057,7 +1051,7 @@ private:
 			m_farmRecheckPeriod = m_defaultStratumFarmRecheckPeriod;
 		
 		GenericFarm<EthashProofOfWork> f;
-		EthStratumClient client(&f, m_minerType, m_farmURL, m_port, m_user, m_pass, m_maxFarmRetries, m_worktimeout, m_precompute);
+		EthStratumClient client(&f, m_minerType, m_farmURL, m_port, m_user, m_pass, m_maxFarmRetries, m_worktimeout, m_precompute, m_speedReportSocket, m_speedReportPort);
 		if (m_farmFailOverURL != "")
 		{
 			if (m_fuser != "")
@@ -1080,11 +1074,10 @@ private:
 		boost::asio::ip::udp::endpoint endpoint(boost::asio::ip::address::from_string("127.0.0.1"), m_speedReportPort);
 		 
 #define WORKINGPROGRESS_BACKLOG_SIZE 32
-#define REPORT_DELAY 4
+//#define REPORT_DELAY 4
 		WorkingProgress wplist[WORKINGPROGRESS_BACKLOG_SIZE];
 		int wplist_index = 0;
 		bool first = false;
-		//int wplist_filled = 0;
 
 		while (client.isRunning())
 		{
@@ -1103,23 +1096,24 @@ private:
 					mp.hashes += wplist[i].hashes;
 					mp.ms += wplist[i].ms;
 				}
-
-				if (wplist_index % REPORT_DELAY == 0)
-				{
-					ReportStruct rs;
-					rs.speed = 0;
-					if (mp.ms > 0)
-						rs.speed = (double)mp.hashes / (mp.ms * 1000);
-					rs.DAGprogress = 100;
-					m_speedReportSocket->send_to(boost::asio::buffer((void*)&rs, sizeof(ReportStruct)), endpoint);
-				}
 			}
 
 			f.resetMiningProgress();
 			if (client.isConnected())
 			{
 				if (client.current())
+				{
 					minelog << "Mining on PoWhash" << "#" + (client.currentHeaderHash().hex().substr(0, 8)) << ": " << mp << f.getSolutionStats();
+					//if (wplist_index % REPORT_DELAY == 0)
+					//{
+						ReportStruct rs;
+						rs.speed = 0;
+						if (mp.ms > 0)
+							rs.speed = (double)mp.hashes / (mp.ms * 1000);
+						rs.DAGprogress = 100;
+						m_speedReportSocket->send_to(boost::asio::buffer((void*)&rs, sizeof(ReportStruct)), endpoint);
+					//}
+				}
 				else if (client.waitState() == MINER_WAIT_STATE_WORK)
 					minelog << "Waiting for work package...";
 			}

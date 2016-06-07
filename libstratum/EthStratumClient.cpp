@@ -5,7 +5,8 @@
 using boost::asio::ip::tcp;
 
 
-EthStratumClient::EthStratumClient(GenericFarm<EthashProofOfWork> * f, MinerType m, string const & host, string const & port, string const & user, string const & pass, int const & retries, int const & worktimeout, bool const & precompute)
+EthStratumClient::EthStratumClient(GenericFarm<EthashProofOfWork> * f, MinerType m, string const & host, string const & port, string const & user, string const & pass, int const & retries, int const & worktimeout, bool const & precompute,
+	boost::asio::ip::udp::socket* speedReportSocket, uint16_t speedReportPort)
 	: m_socket(m_io_service)
 {
 	m_minerType = m;
@@ -22,6 +23,9 @@ EthStratumClient::EthStratumClient(GenericFarm<EthashProofOfWork> * f, MinerType
 	m_pending = 0;
 	m_maxRetries = retries;
 	m_worktimeout = worktimeout;
+
+	m_speedReportSocket = speedReportSocket;
+	m_speedReportPort = speedReportPort;
 
 	p_farm = f;
 	p_worktimer = nullptr;
@@ -354,7 +358,15 @@ void EthStratumClient::processReponse(Json::Value& responseObject)
 					{
 						cnote << "Grabbing DAG for" << seedHash;
 					}
-					if (!(dag = EthashAux::full(seedHash, true, [&](unsigned _pc){ m_waitState = _pc < 100 ? MINER_WAIT_STATE_DAG : MINER_WAIT_STATE_WORK;  cnote << "Creating DAG. " << _pc << "% done..."; return 0; })))
+					if (!(dag = EthashAux::full(seedHash, true, [&](unsigned _pc) { 
+						m_waitState = _pc < 100 ? MINER_WAIT_STATE_DAG : MINER_WAIT_STATE_WORK;  cnote << "Creating DAG. " << _pc << "% done..."; 
+						ReportStruct rs;
+						rs.DAGprogress = _pc;
+						rs.speed = 0;
+						boost::asio::ip::udp::endpoint endpoint(boost::asio::ip::address::from_string("127.0.0.1"), m_speedReportPort);
+						m_speedReportSocket->send_to(boost::asio::buffer((void*)&rs, (size_t)sizeof(ReportStruct)), endpoint);
+						return 0; 
+					})))
 					{
 						BOOST_THROW_EXCEPTION(DAGCreationFailure());
 					}
@@ -398,6 +410,7 @@ void EthStratumClient::processReponse(Json::Value& responseObject)
 			if (params.isArray())
 			{
 				m_nextWorkDifficulty = params.get((Json::Value::ArrayIndex)0, 1).asDouble();
+				if (m_nextWorkDifficulty <= 0.0001) m_nextWorkDifficulty = 0.0001;
 				cnote << "Difficulty set to " << m_nextWorkDifficulty;
 			}
 		}
@@ -436,7 +449,7 @@ bool EthStratumClient::submit(EthashProofOfWork::Solution solution) {
 
 	cnote << "Solution found; Submitting to" << p_active->host << "...";
 	string minernonce = solution.nonce.hex().substr(m_extraNonceHexSize, 16 - m_extraNonceHexSize);
-	cnote << "  Miner nonce:" << minernonce;
+	//cnote << "  Miner nonce:" << minernonce;
 
 	if (EthashAux::eval(tempWork.seedHash, tempWork.headerHash, solution.nonce).value < tempWork.boundary)
 	{
