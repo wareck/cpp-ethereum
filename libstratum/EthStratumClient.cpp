@@ -268,7 +268,7 @@ static void diffToTarget(uint32_t *target, double diff)
 		((uint8_t*)target)[31 - i] = ((uint8_t*)target2)[i];
 }
 
-void EthStratumClient::processExtranonce(string& enonce)
+void EthStratumClient::processExtranonce(std::string& enonce)
 {
 	m_extraNonceHexSize = enonce.length();
 
