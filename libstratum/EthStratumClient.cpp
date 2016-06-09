@@ -296,7 +296,10 @@ void EthStratumClient::processReponse(Json::Value& responseObject)
 
 		params = responseObject.get("result", Json::Value::null);
 		if (params.isArray())
-			processExtranonce(params.get((Json::Value::ArrayIndex)1, "").asString());
+		{
+			std::string enonce = params.get((Json::Value::ArrayIndex)1, "").asString();
+			processExtranonce(enonce);
+		}
 
 		os << "{\"id\": 2, \"method\": \"mining.extranonce.subscribe\", \"params\": []}\n";
 
