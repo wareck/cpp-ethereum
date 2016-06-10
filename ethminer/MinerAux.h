@@ -672,11 +672,19 @@ private:
 	{
 		h256 seedHash = EthashAux::seedHash(_n);
 		cout << "Initializing DAG for epoch beginning #" << (_n / 30000 * 30000) << " (seedhash " << seedHash.abridged() << "). This will take a while." << endl;
-		EthashAux::full(seedHash, true, [&](unsigned _pc) {
+		if (!EthashAux::full(seedHash, true, [&](unsigned _pc) {
 			cout << "\rCreating DAG. " << _pc << "% done..." << flush;
 			reportDAGprogress(_pc);
 			return 0;
-		});
+		}))
+		{
+			reportDAGprogress(0);
+		}
+		else
+		{
+			reportDAGprogress(100);
+		}
+
 		exit(0);
 	}
 
