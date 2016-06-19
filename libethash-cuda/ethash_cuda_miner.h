@@ -21,6 +21,7 @@ public:
 
 public:
 	ethash_cuda_miner();
+	~ethash_cuda_miner();
 
 	static std::string platform_info(unsigned _deviceId = 0);
 	static unsigned getNumDevices();
@@ -34,13 +35,11 @@ public:
 		unsigned _scheduleFlag,
 		uint64_t _currentBlock
 		);
-	bool init(
-		uint8_t const* _dag,
-		uint64_t _dagSize,
-		unsigned _deviceId = 0
-		);
+
+	bool init(ethash_light_t _light, uint8_t const* _lightData, uint64_t _lightSize, unsigned _deviceId, bool _cpyToHost, volatile void** hostDAG);
+
 	void finish();
-	void search(uint8_t const* header, uint64_t target, search_hook& hook, uint64_t startn);
+	void search(uint8_t const* header, uint64_t target, search_hook& hook, bool _ethStratum, uint64_t _startN);
 
 	/* -- default values -- */
 	/// Default value of the block size. Also known as workgroup size.
@@ -57,8 +56,12 @@ private:
 	uint64_t m_starting_nonce;
 	uint64_t m_current_index;
 
+	uint32_t m_sharedBytes;
+
 	volatile uint32_t ** m_search_buf;
 	cudaStream_t  * m_streams;
+
+	int m_device;
 
 	/// The local work size for the search
 	static unsigned s_blockSize;

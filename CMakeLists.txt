@@ -2,8 +2,8 @@
 cmake_minimum_required(VERSION 2.8.12)
 
 set(PROJECT_VERSION "0.9.41")
-set(GENOIL_VERSION "1.0.8")
-set(NICEHASH_VERSION "1.0.0")
+set(GENOIL_VERSION "1.1.5")
+set(NICEHASH_VERSION "1.1.0")
 if (${CMAKE_VERSION} VERSION_GREATER 3.0)
 	cmake_policy(SET CMP0042 OLD) 	# fix MACOSX_RPATH
 	cmake_policy(SET CMP0048 NEW) 	# allow VERSION argument in project()
@@ -267,11 +267,13 @@ message("-- MINER            Build miner                              ${MINER}")
 message("-- GUI              Build GUI components                     ${GUI}")
 message("-- ETHASHCL         Build OpenCL components                  ${ETHASHCL}")
 message("-- ETHASHCUDA       Build CUDA components                    ${ETHASHCUDA}")
-message("-- ETHSTRATUM       Build Stratum components (experimental)  ${ETHSTRATUM}")
+message("-- ETHSTRATUM       Build Stratum components                 ${ETHSTRATUM}")
 message("------------------------------------------------------------------------")
 message("")
 
+if (NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
 set(CMAKE_THREAD_LIBS_INIT pthread)
+endif()
 
 include(EthCompilerSettings)
 message("-- CXXFLAGS: ${CMAKE_CXX_FLAGS}")
