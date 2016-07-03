@@ -271,8 +271,8 @@ bool ethash_cuda_miner::init(ethash_light_t _light, uint8_t const* _lightData, u
 
 			if (_cpyToHost)
 			{
-				uint8_t* memoryDAG = nullptr; // = new uint8_t[dagSize];
-				CUDA_SAFE_CALL(cudaHostAlloc(&memoryDAG, dagSize, 0));
+				uint8_t* memoryDAG = new uint8_t[dagSize];
+				//CUDA_SAFE_CALL(cudaHostAlloc(&memoryDAG, dagSize, 0));
 				if (!memoryDAG) throw std::runtime_error("Failed to init host memory for DAG, not enough memory?");
 
 				cout << "Copying DAG from GPU #" << m_device << " to host" << endl;
