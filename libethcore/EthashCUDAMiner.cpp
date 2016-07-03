@@ -180,7 +180,8 @@ void EthashCUDAMiner::workLoop()
 					// free DAG if already existing
 					if (s_dagInHostMemory && *s_dagSeed != w.seedHash)
 					{
-						delete[] s_dagInHostMemory;
+						//delete[] s_dagInHostMemory;
+						CUDA_SAFE_CALL(cudaFreeHost((void*)s_dagInHostMemory));
 						s_dagInHostMemory = nullptr;
 
 						cout << "Freeing DAG from host" << endl;
@@ -212,7 +213,8 @@ void EthashCUDAMiner::workLoop()
 				if (s_dagLoadIndex >= s_numInstances && s_dagInHostMemory)
 				{
 					// all devices have loaded DAG, we can free now
-					delete[] s_dagInHostMemory;
+					//delete[] s_dagInHostMemory;
+					CUDA_SAFE_CALL(cudaFreeHost((void*)s_dagInHostMemory));
 					s_dagInHostMemory = nullptr;
 
 					cout << "Freeing DAG from host" << endl;

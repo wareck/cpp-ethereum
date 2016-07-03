@@ -1018,12 +1018,13 @@ private:
 
 		try
 		{
-			boost::array<char, 1> recv_buf;
+			boost::array<char, 16> recv_buf;
 			boost::system::error_code error;
 			size_t s = api_socket->receive_from(boost::asio::buffer(recv_buf), remote_endpoint, 0, error);
 			if (error && error != boost::asio::error::would_block)
 				throw boost::system::system_error(error);
-			if (s != 1) return 0;
+			if (s < 1) return 0;
+			//std::cout << "API received " << s << std::endl;
 			return (int)recv_buf.at(0);
 		}
 		catch (std::exception& e)
@@ -1058,6 +1059,7 @@ private:
 				api_socket = new boost::asio::ip::udp::socket(m_io_service, endpoint);
 				boost::asio::socket_base::non_blocking_io nb(true);
 				api_socket->io_control(nb);
+				minelog << "API port " << m_apiPort << " bound";
 			}
 			catch (std::exception& e)
 			{
@@ -1166,6 +1168,7 @@ private:
 							double spd = 0;
 							if (mp.ms > 0) spd = (double)mp.hashes / (mp.ms * 1000);
 							api_socket->send_to(boost::asio::buffer((void*)&spd, sizeof(spd)), remote_endpoint);
+							//std::cout << "API replied "<< std::endl;
 						}
 					}
 					if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp).count() < m_farmRecheckPeriod)
