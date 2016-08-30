@@ -33,7 +33,6 @@ if not exist %eth_name%-%eth_version% cmake -E tar -zxvf %eth_name%-%eth_version
 cmake -E copy_directory %eth_name%-%eth_version% ..\install\windows
 
 cd ..
-exit
 goto :EOF
 
 
