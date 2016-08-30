@@ -188,7 +188,7 @@ public:
 			if (p + 1 <= userpass.length())
 				m_pass = userpass.substr(p+1);
 		}
-		/*else if ((arg == "-SV" || arg == "--stratum-version") && i + 1 < argc)
+		else if ((arg == "-SV" || arg == "--stratum-version") && i + 1 < argc)
 		{
 			try {
 				m_stratumClientVersion = atoi(argv[++i]);
@@ -200,11 +200,11 @@ public:
 				cerr << "Bad " << arg << " option: " << argv[i] << endl;
 				BOOST_THROW_EXCEPTION(BadArgument());
 			}
-		}*/
-		//else if (arg == "-ES" || arg == "--ethereum-stratum")
-		//{
-		//	m_ethereumStratum = true;
-		//}
+		}
+		else if (arg == "-ES" || arg == "--ethereum-stratum")
+		{
+			m_ethereumStratum = true;
+		}
 		else if ((arg == "-FO" || arg == "--failover-userpass") && i + 1 < argc)
 		{
 			string userpass = string(argv[++i]);
@@ -620,8 +620,8 @@ public:
 			<< "    -O, --userpass <username.workername:password> Stratum login credentials" << endl
 			<< "    -FO, --failover-userpass <username.workername:password> Failover stratum login credentials (optional, will use normal credentials when omitted)" << endl
 			<< "    --work-timeout <n> reconnect/failover after n seconds of working on the same (stratum) job. Defaults to 180. Don't set lower than max. avg. block time" << endl
-			//<< "    -SV, --stratum-version <n>  Stratum client version. Defaults to 1 (async client). Use 2 to test new synchronous client." << endl
-			//<< "    -ES, --ethereum-stratum  Use EthereumStratum/1.0.0 mode." << endl
+			<< "    -SV, --stratum-version <n>  Stratum client version. Defaults to 1 (async client). Use 2 to test new synchronous client." << endl
+			<< "    -ES, --ethereum-stratum  Use EthereumStratum/1.0.0 mode." << endl
 #endif
 #if ETH_JSONRPC || ETH_STRATUM || !ETH_TRUE
 			<< "    --farm-recheck <n>  Leave n ms between checks for changed work (default: 500). When using stratum, use a high value (i.e. 2000) to get more stable hashrate output" << endl
@@ -1094,7 +1094,7 @@ private:
 
 			GenericFarm<EthashProofOfWork> f;
 
-			EthStratumClientV2 client(&f, m_minerType, m_farmURL, m_port, m_user, m_pass, m_maxFarmRetries, m_worktimeout, true);
+			EthStratumClientV2 client(&f, m_minerType, m_farmURL, m_port, m_user, m_pass, m_maxFarmRetries, m_worktimeout, m_ethereumStratum);
 			if (m_farmFailOverURL != "")
 			{
 				if (m_fuser != "")
