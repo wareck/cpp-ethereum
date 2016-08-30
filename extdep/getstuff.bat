@@ -33,6 +33,9 @@ if not exist %eth_name%-%eth_version% cmake -E tar -zxvf %eth_name%-%eth_version
 cmake -E copy_directory %eth_name%-%eth_version% ..\install\windows
 
 cd ..
-
+cd ..
+mkdir build 
+cd build
+cmake -DBUNDLE=miner -G "Visual Studio 12 2013 Win64" ..
 goto :EOF
 
