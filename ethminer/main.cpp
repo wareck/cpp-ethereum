@@ -76,6 +76,7 @@ int main(int argc, char** argv)
 	cout << "Stratum options re-enabled by wareck" << endl << endl;
 	cout << "Please consider a donation to:" << endl;
 	cout << "ETH: 0xeb9310b185455f863f526dab3d245809f6854b4d" << endl << endl;
+	cout << "" << endl << endl;
 	
 	MinerCLI m(MinerCLI::OperationMode::Farm);
 
